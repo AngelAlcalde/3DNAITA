@@ -1,0 +1,6 @@
+{
+  "name": "3DNA – Sistema de Gestión Online de Impresión 3D",
+  "description": "Sistema de gestión colaborativo en tiempo real para 3DNA (Hecho en Itá Ibaté). Control de pedidos, producción, precios, clientes, ingresos, gastos y finanzas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
