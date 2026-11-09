@@ -84,8 +84,8 @@ function setLocal<T>(key: string, value: T): void {
   }
 }
 
-// Initialize seed data if empty
-export function initStore(): void {
+// Initialize store from local storage and sync with Supabase in the background
+export async function initStore(): Promise<void> {
   if (typeof window === 'undefined') return;
 
   if (!localStorage.getItem(STORAGE_KEYS.ORDERS)) {
@@ -111,6 +111,91 @@ export function initStore(): void {
   }
   if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) {
     setLocal(STORAGE_KEYS.CONFIG, initialConfig);
+  }
+
+  // Connect to Supabase Cloud Database and fetch live records
+  const supabase = getSupabase();
+  if (supabase) {
+    try {
+      const [
+        { data: dbOrders },
+        { data: dbProducts },
+        { data: dbClients },
+        { data: dbIncomes },
+        { data: dbExpenses },
+        { data: dbCategories },
+      ] = await Promise.all([
+        supabase.from('pedidos').select('*').order('estimated_delivery_date', { ascending: true }),
+        supabase.from('productos').select('*').order('name', { ascending: true }),
+        supabase.from('clientes').select('*').order('name', { ascending: true }),
+        supabase.from('ingresos').select('*').order('date', { ascending: false }),
+        supabase.from('gastos').select('*').order('date', { ascending: false }),
+        supabase.from('categorias_gastos').select('*').order('name', { ascending: true }),
+      ]);
+
+      if (dbOrders && dbOrders.length > 0) {
+        setLocal(STORAGE_KEYS.ORDERS, dbOrders.map(dbToOrder));
+      }
+      if (dbProducts && dbProducts.length > 0) {
+        setLocal(STORAGE_KEYS.PRODUCTS, dbProducts.map(dbToProduct));
+      }
+      if (dbClients && dbClients.length > 0) {
+        setLocal(STORAGE_KEYS.CLIENTS, dbClients.map(dbToClient));
+      }
+      if (dbIncomes && dbIncomes.length > 0) {
+        setLocal(STORAGE_KEYS.INCOMES, dbIncomes.map(dbToIncome));
+      }
+      if (dbExpenses && dbExpenses.length > 0) {
+        setLocal(STORAGE_KEYS.EXPENSES, dbExpenses.map(dbToExpense));
+      }
+      if (dbCategories && dbCategories.length > 0) {
+        setLocal(STORAGE_KEYS.CATEGORIES, dbCategories.map(dbToCategory));
+      }
+
+      notifyListeners('SUPABASE_LOADED');
+
+      // Realtime subscription across all connected devices
+      supabase
+        .channel('3dna-realtime-global')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, async () => {
+          const { data } = await supabase.from('pedidos').select('*').order('estimated_delivery_date', { ascending: true });
+          if (data) {
+            setLocal(STORAGE_KEYS.ORDERS, data.map(dbToOrder));
+            notifyListeners('REALTIME_PEDIDOS');
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'ingresos' }, async () => {
+          const { data } = await supabase.from('ingresos').select('*').order('date', { ascending: false });
+          if (data) {
+            setLocal(STORAGE_KEYS.INCOMES, data.map(dbToIncome));
+            notifyListeners('REALTIME_INGRESOS');
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'gastos' }, async () => {
+          const { data } = await supabase.from('gastos').select('*').order('date', { ascending: false });
+          if (data) {
+            setLocal(STORAGE_KEYS.EXPENSES, data.map(dbToExpense));
+            notifyListeners('REALTIME_GASTOS');
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, async () => {
+          const { data } = await supabase.from('productos').select('*').order('name', { ascending: true });
+          if (data) {
+            setLocal(STORAGE_KEYS.PRODUCTS, data.map(dbToProduct));
+            notifyListeners('REALTIME_PRODUCTOS');
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, async () => {
+          const { data } = await supabase.from('clientes').select('*').order('name', { ascending: true });
+          if (data) {
+            setLocal(STORAGE_KEYS.CLIENTS, data.map(dbToClient));
+            notifyListeners('REALTIME_CLIENTES');
+          }
+        })
+        .subscribe();
+    } catch (err) {
+      console.warn('Initial Supabase fetch error:', err);
+    }
   }
 }
 
@@ -662,6 +747,202 @@ export function resetToSeedData(): void {
   notifyListeners('RESET_TO_SEED');
 }
 
+// =================== POSTGRESQL SCHEMA MAPPERS ===================
+
+function dbToOrder(row: any): Order {
+  return {
+    id: row.id,
+    orderNumber: row.order_number,
+    clientName: row.client_name,
+    clientPhone: row.client_phone || '',
+    productName: row.product_name,
+    productId: row.product_id || undefined,
+    description: row.description || '',
+    quantity: Number(row.quantity) || 1,
+    color: row.color || 'Blanco',
+    material: row.material || 'PLA',
+    estimatedDeliveryDate: row.estimated_delivery_date,
+    costPrice: Number(row.cost_price) || 0,
+    retailPrice: Number(row.retail_price) || 0,
+    wholesalePrice: Number(row.wholesale_price) || 0,
+    agreedPrice: Number(row.agreed_price) || 0,
+    totalAgreed: Number(row.total_agreed) || 0,
+    deposit: Number(row.deposit) || 0,
+    pendingBalance: Number(row.pending_balance) || 0,
+    status: (row.status as OrderStatus) || 'Recibido',
+    notes: row.notes || '',
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function orderToDb(o: Order) {
+  return {
+    id: o.id,
+    order_number: o.orderNumber,
+    client_name: o.clientName,
+    client_phone: o.clientPhone || null,
+    product_name: o.productName,
+    product_id: o.productId || null,
+    description: o.description || null,
+    quantity: o.quantity,
+    color: o.color,
+    material: o.material,
+    estimated_delivery_date: o.estimatedDeliveryDate,
+    cost_price: o.costPrice,
+    retail_price: o.retailPrice,
+    wholesale_price: o.wholesalePrice,
+    agreed_price: o.agreedPrice,
+    total_agreed: o.totalAgreed,
+    deposit: o.deposit,
+    pending_balance: o.pendingBalance,
+    status: o.status,
+    notes: o.notes || null,
+    created_at: o.createdAt,
+  };
+}
+
+function dbToProduct(row: any): Product {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    description: row.description || '',
+    material: row.material,
+    manufacturingCost: Number(row.manufacturing_cost) || 0,
+    retailPrice: Number(row.retail_price) || 0,
+    wholesalePrice: Number(row.wholesale_price) || 0,
+    retailMarginPercent: Number(row.retail_margin_percent) || 0,
+    wholesaleMarginPercent: Number(row.wholesale_margin_percent) || 0,
+    printTimeHours: Number(row.print_time_hours) || 0,
+    filamentWeightGrams: Number(row.filament_weight_grams) || 0,
+    isActive: row.is_active !== false,
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function productToDb(p: Product) {
+  return {
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    description: p.description || null,
+    material: p.material,
+    manufacturing_cost: p.manufacturingCost,
+    retail_price: p.retailPrice,
+    wholesale_price: p.wholesalePrice,
+    retail_margin_percent: p.retailMarginPercent,
+    wholesale_margin_percent: p.wholesaleMarginPercent,
+    print_time_hours: p.printTimeHours || 0,
+    filament_weight_grams: p.filamentWeightGrams || 0,
+    is_active: p.isActive,
+    created_at: p.createdAt,
+  };
+}
+
+function dbToClient(row: any): Client {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone || '',
+    email: row.email || '',
+    notes: row.notes || '',
+    totalOrders: Number(row.total_orders) || 0,
+    totalSpent: Number(row.total_spent) || 0,
+    pendingBalance: Number(row.pending_balance) || 0,
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function clientToDb(c: Client) {
+  return {
+    id: c.id,
+    name: c.name,
+    phone: c.phone || null,
+    email: c.email || null,
+    notes: c.notes || null,
+    total_orders: c.totalOrders,
+    total_spent: c.totalSpent,
+    pending_balance: c.pendingBalance,
+    created_at: c.createdAt,
+  };
+}
+
+function dbToIncome(row: any): Income {
+  return {
+    id: row.id,
+    date: row.date,
+    orderId: row.order_id || undefined,
+    orderNumber: row.order_number || undefined,
+    clientName: row.client_name,
+    concept: row.concept,
+    amount: Number(row.amount) || 0,
+    paymentMethod: row.payment_method,
+    notes: row.notes || '',
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function incomeToDb(i: Income) {
+  return {
+    id: i.id,
+    date: i.date,
+    order_id: i.orderId || null,
+    order_number: i.orderNumber || null,
+    client_name: i.clientName,
+    concept: i.concept,
+    amount: i.amount,
+    payment_method: i.paymentMethod,
+    notes: i.notes || null,
+    created_at: i.createdAt,
+  };
+}
+
+function dbToExpense(row: any): Expense {
+  return {
+    id: row.id,
+    date: row.date,
+    categoryId: row.category_id || '',
+    categoryName: row.category_name,
+    expenseType: row.expense_type,
+    description: row.description,
+    amount: Number(row.amount) || 0,
+    paymentMethod: row.payment_method,
+    notes: row.notes || '',
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function expenseToDb(e: Expense) {
+  return {
+    id: e.id,
+    date: e.date,
+    category_id: e.categoryId || null,
+    category_name: e.categoryName,
+    expense_type: e.expenseType,
+    description: e.description,
+    amount: e.amount,
+    payment_method: e.paymentMethod,
+    notes: e.notes || null,
+    created_at: e.createdAt,
+  };
+}
+
+function dbToCategory(row: any): ExpenseCategory {
+  return {
+    id: row.id,
+    name: row.name,
+    isEquipment: Boolean(row.is_equipment),
+  };
+}
+
+function categoryToDb(c: ExpenseCategory) {
+  return {
+    id: c.id,
+    name: c.name,
+    is_equipment: c.isEquipment,
+  };
+}
+
 // =================== SUPABASE BACKGROUND SYNC ===================
 
 async function syncToSupabase(table: string, action: 'INSERT' | 'UPDATE' | 'DELETE', payload: any) {
@@ -669,10 +950,25 @@ async function syncToSupabase(table: string, action: 'INSERT' | 'UPDATE' | 'DELE
   if (!supabase) return;
 
   try {
+    let dbPayload = payload;
+    if (table === 'pedidos' && action !== 'DELETE') {
+      dbPayload = orderToDb(payload);
+    } else if (table === 'productos' && action !== 'DELETE') {
+      dbPayload = productToDb(payload);
+    } else if (table === 'clientes' && action !== 'DELETE') {
+      dbPayload = clientToDb(payload);
+    } else if (table === 'ingresos' && action !== 'DELETE') {
+      dbPayload = incomeToDb(payload);
+    } else if (table === 'gastos' && action !== 'DELETE') {
+      dbPayload = expenseToDb(payload);
+    } else if (table === 'categorias_gastos' && action !== 'DELETE') {
+      dbPayload = categoryToDb(payload);
+    }
+
     if (action === 'INSERT') {
-      await supabase.from(table).insert(payload);
+      await supabase.from(table).upsert(dbPayload);
     } else if (action === 'UPDATE') {
-      await supabase.from(table).update(payload).eq('id', payload.id);
+      await supabase.from(table).update(dbPayload).eq('id', payload.id);
     } else if (action === 'DELETE') {
       await supabase.from(table).delete().eq('id', payload.id);
     }

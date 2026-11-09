@@ -5,10 +5,21 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Read from Vite environment variables or runtime settings
+// Read from Vite/Next environment variables or defaults
+const DEFAULT_SUPABASE_URL = 'https://pccefgdjbarrbkukihxc.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjY2VmZ2RqYmFycmJrdWtpaHhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQxODExNzAsImV4cCI6MjEwOTc1NzE3MH0.2X0NfJaeCOi6ZJEZNbrDhPoOCaVoTCiOkSyIsLmIi-o';
+
 let currentSupabaseClient: SupabaseClient | null = null;
-let configuredUrl = import.meta.env.VITE_SUPABASE_URL || '';
-let configuredAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+let configuredUrl =
+  (import.meta.env && (import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL)) ||
+  DEFAULT_SUPABASE_URL;
+let configuredAnonKey =
+  (import.meta.env &&
+    (import.meta.env.VITE_SUPABASE_ANON_KEY ||
+      import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      import.meta.env.SUPABASE_ANON_KEY)) ||
+  DEFAULT_SUPABASE_ANON_KEY;
 
 export function getSupabaseConfig(): { url: string; anonKey: string; isConfigured: boolean } {
   // Check localStorage for manually configured keys in Settings

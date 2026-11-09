@@ -35,10 +35,13 @@ Este proyecto está 100% optimizado para ejecutarse en la nube y desplegarse en 
 1. Ingresa a [vercel.com](https://vercel.com) con tu cuenta de GitHub.
 2. Haz clic en **"Add New..."** -> **"Project"**.
 3. Selecciona tu repositorio `3dna-gestion` e impórtalo.
-4. En la sección **Environment Variables**, añade las dos variables copiadas de Supabase:
-   - `VITE_SUPABASE_URL` = tu Project URL
-   - `VITE_SUPABASE_ANON_KEY` = tu anon key
+4. En la sección **Environment Variables**, añade las variables:
+   - `VITE_SUPABASE_URL` = tu Project URL de Supabase (ej: `https://xyz.supabase.co`)
+   - `VITE_SUPABASE_ANON_KEY` = tu anon key de Supabase
+   - `VITE_CONFIG_NATIVE_IGNORE_WARNING` = `true` (opcional, ya configurado automáticamente en `vercel.json`)
 5. Haz clic en **"Deploy"**. En menos de 60 segundos tu sistema estará online en una dirección permanente (por ejemplo: `https://3dna.vercel.app`), accesible desde cualquier celular, tablet o computadora del mundo.
+
+El proyecto ya incluye un archivo `vercel.json` preconfigurado con enrutamiento SPA y eliminación de advertencias.
 
 ---
 

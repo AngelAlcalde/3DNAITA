@@ -481,8 +481,8 @@ export const initialConfig: SystemConfig = {
   logoUrl: '/src/assets/images/logo_3dna_brand_1794182176233.jpg',
   currencySymbol: '$',
   accessMode: 'abierta', // Inicia en abierta para que el usuario pueda probar todo de inmediato
-  supabaseUrl: '',
-  supabaseAnonKey: '',
+  supabaseUrl: 'https://pccefgdjbarrbkukihxc.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjY2VmZ2RqYmFycmJrdWtpaHhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQxODExNzAsImV4cCI6MjEwOTc1NzE3MH0.2X0NfJaeCOi6ZJEZNbrDhPoOCaVoTCiOkSyIsLmIi-o',
   enableRealtime: true,
   alertDaysThreshold: 3,
 };
